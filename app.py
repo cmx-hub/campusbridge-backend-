@@ -24,7 +24,9 @@ def health_check():
 def get_opportunities():
     connection = get_db_connection()
 
-    opportunities = connection.execute("""
+    cursor = connection.cursor()
+
+    cursor.execute("""
         SELECT
             id,
             title,
@@ -38,14 +40,39 @@ def get_opportunities():
             created_at
         FROM opportunities
         ORDER BY id DESC
-    """).fetchall()
+    """)
 
+    opportunities = cursor.fetchall()
+
+    cursor.close()
     connection.close()
 
-    return jsonify([
-        dict(opportunity)
-        for opportunity in opportunities
-    ])
+    # PostgreSQL returns tuples, so convert them using column names.
+    if os.environ.get("DATABASE_URL"):
+        columns = [
+            "id",
+            "title",
+            "category",
+            "organization",
+            "description",
+            "source_url",
+            "location",
+            "deadline",
+            "status",
+            "created_at"
+        ]
+
+        opportunities = [
+            dict(zip(columns, opportunity))
+            for opportunity in opportunities
+        ]
+    else:
+        opportunities = [
+            dict(opportunity)
+            for opportunity in opportunities
+        ]
+
+    return jsonify(opportunities)
 
 
 if __name__ == "__main__":

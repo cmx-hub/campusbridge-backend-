@@ -1,3 +1,4 @@
+import os
 from database import get_db_connection
 
 
@@ -95,11 +96,23 @@ opportunities = [
 ]
 
 
-connection = get_db_connection()
+def seed_database():
+    connection = get_db_connection()
+    cursor = connection.cursor()
 
-for opportunity in opportunities:
-    connection.execute(
-        """
+    # PostgreSQL uses %s while SQLite uses ?
+    placeholder = "%s" if os.environ.get("DATABASE_URL") else "?"
+
+    cursor.execute("SELECT COUNT(*) FROM opportunities")
+    count = cursor.fetchone()[0]
+
+    if count > 0:
+        print(f"Database already contains {count} opportunities. No new records added.")
+        cursor.close()
+        connection.close()
+        return
+
+    query = f"""
         INSERT INTO opportunities (
             title,
             category,
@@ -110,21 +123,32 @@ for opportunity in opportunities:
             deadline,
             status
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            opportunity["title"],
-            opportunity["category"],
-            opportunity["organization"],
-            opportunity["description"],
-            opportunity["source_url"],
-            opportunity["location"],
-            opportunity["deadline"],
-            opportunity["status"]
+        VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder},
+                {placeholder}, {placeholder}, {placeholder}, {placeholder})
+    """
+
+    for opportunity in opportunities:
+        cursor.execute(
+            query,
+            (
+                opportunity["title"],
+                opportunity["category"],
+                opportunity["organization"],
+                opportunity["description"],
+                opportunity["source_url"],
+                opportunity["location"],
+                opportunity["deadline"],
+                opportunity["status"]
+            )
         )
-    )
 
-connection.commit()
-connection.close()
+    connection.commit()
 
-print(f"{len(opportunities)} opportunities added successfully.")
+    cursor.close()
+    connection.close()
+
+    print(f"{len(opportunities)} opportunities added successfully.")
+
+
+if __name__ == "__main__":
+    seed_database()
