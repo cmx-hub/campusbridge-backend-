@@ -37,7 +37,8 @@ CORS(
     resources={
         r"/api/*": {
             "origins": [
-                "https://cmx-hub.github.io"
+                "https://cmx-hub.github.io",
+                "https://campusbridge-mu.vercel.app"
             ]
         }
     }
@@ -142,6 +143,94 @@ def verify_opportunity():
 
 
 if __name__ == "__main__":
+@app.route("/api/opportunities/submit", methods=["POST"])
+def submit_opportunity():
+    data = request.get_json(silent=True) or {}
+
+    required = [
+        "owner_id",
+        "title",
+        "category",
+        "organization",
+        "source_url"
+    ]
+
+    missing = [field for field in required if not data.get(field)]
+
+    if missing:
+        return jsonify({
+            "success": False,
+            "error": "Missing required fields",
+            "missing": missing
+        }), 400
+
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    try:
+        if os.environ.get("DATABASE_URL"):
+            cursor.execute("""
+                INSERT INTO opportunities (
+                    title, category, organization, description,
+                    source_url, location, deadline, status,
+                    owner_id, approval_status, verification_status, featured
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s,
+                        'active', %s, 'pending', 'pending', FALSE)
+                RETURNING id
+            """, (
+                data["title"],
+                data["category"],
+                data["organization"],
+                data.get("description"),
+                data["source_url"],
+                data.get("location"),
+                data.get("deadline"),
+                data["owner_id"]
+            ))
+            opportunity_id = cursor.fetchone()[0]
+
+        else:
+            cursor.execute("""
+                INSERT INTO opportunities (
+                    title, category, organization, description,
+                    source_url, location, deadline, status,
+                    owner_id, approval_status, verification_status, featured
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, 'pending', 'pending', 0)
+            """, (
+                data["title"],
+                data["category"],
+                data["organization"],
+                data.get("description"),
+                data["source_url"],
+                data.get("location"),
+                data.get("deadline"),
+                data["owner_id"]
+            ))
+            opportunity_id = cursor.lastrowid
+
+        connection.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Opportunity submitted successfully and is pending review.",
+            "opportunity_id": opportunity_id,
+            "approval_status": "pending",
+            "verification_status": "pending"
+        }), 201
+
+    except Exception as e:
+        connection.rollback()
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+    finally:
+        connection.close()
+
+
     app.run(
         debug=True,
         host="0.0.0.0",
