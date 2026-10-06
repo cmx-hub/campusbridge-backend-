@@ -119,6 +119,20 @@ def init_db():
 
     if database_url:
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS verification_records (
+                id SERIAL PRIMARY KEY,
+                url TEXT NOT NULL,
+                organization TEXT,
+                risk_level TEXT,
+                risk_score INTEGER,
+                source_verified BOOLEAN,
+                findings TEXT,
+                risk_evidence TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS opportunities (
                 id SERIAL PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -153,6 +167,20 @@ def init_db():
 
     else:
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS verification_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url TEXT NOT NULL,
+                organization TEXT,
+                risk_level TEXT,
+                risk_score INTEGER,
+                source_verified INTEGER,
+                findings TEXT,
+                risk_evidence TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS opportunities (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
@@ -175,3 +203,60 @@ def init_db():
 if __name__ == "__main__":
     init_db()
     print("CampusBridge database initialized successfully.")
+
+
+def save_verification_record(result):
+    import json
+
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    database_url = os.environ.get("DATABASE_URL")
+
+    if database_url:
+        cursor.execute("""
+            INSERT INTO verification_records (
+                url,
+                organization,
+                risk_level,
+                risk_score,
+                source_verified,
+                findings,
+                risk_evidence
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (
+            result.get("url"),
+            result.get("organization"),
+            result.get("risk_level"),
+            result.get("risk_score"),
+            result.get("source_verified"),
+            json.dumps(result.get("findings", [])),
+            json.dumps(result.get("risk_evidence", []))
+        ))
+
+    else:
+        cursor.execute("""
+            INSERT INTO verification_records (
+                url,
+                organization,
+                risk_level,
+                risk_score,
+                source_verified,
+                findings,
+                risk_evidence
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            result.get("url"),
+            result.get("organization"),
+            result.get("risk_level"),
+            result.get("risk_score"),
+            result.get("source_verified"),
+            json.dumps(result.get("findings", [])),
+            json.dumps(result.get("risk_evidence", []))
+        ))
+
+    connection.commit()
+    cursor.close()
+    connection.close()
