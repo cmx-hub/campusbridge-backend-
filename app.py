@@ -142,7 +142,6 @@ def verify_opportunity():
     return jsonify(result)
 
 
-if __name__ == "__main__":
 @app.route("/api/opportunities/submit", methods=["POST"])
 def submit_opportunity():
     data = request.get_json(silent=True) or {}
@@ -283,3 +282,9 @@ def verification_history():
         "count": len(records),
         "records": records
     })
+
+if __name__ == "__main__":
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5000))
+    )
