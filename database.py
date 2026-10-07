@@ -111,6 +111,156 @@ def get_db_connection():
     return connection
 
 
+
+def init_business_tables():
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    if os.environ.get("DATABASE_URL"):
+        statements = [
+            """CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT,
+                role TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                verification_status TEXT DEFAULT 'unverified',
+                verification_risk_score INTEGER DEFAULT 0,
+                last_verified_at TIMESTAMP
+            )""",
+            """CREATE TABLE IF NOT EXISTS organization_profiles
+            CREATE TABLE IF NOT EXISTS student_profiles (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE,
+                institution TEXT,
+                field_of_study TEXT,
+                level TEXT,
+                skills TEXT,
+                interests TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ),
+            CREATE TABLE IF NOT EXISTS organization_profiles (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                organization_name TEXT NOT NULL,
+                website TEXT,
+                description TEXT,
+                verification_status TEXT NOT NULL DEFAULT 'pending',
+                verified_at TIMESTAMP,
+                verified_by INTEGER
+            )""",
+            """CREATE TABLE IF NOT EXISTS subscriptions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                plan TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'inactive',
+                amount INTEGER DEFAULT 0,
+                currency TEXT DEFAULT 'XAF',
+                starts_at TIMESTAMP,
+                expires_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                verification_status TEXT DEFAULT 'unverified',
+                verification_risk_score INTEGER DEFAULT 0,
+                last_verified_at TIMESTAMP
+            )""",
+            """CREATE TABLE IF NOT EXISTS organization_services (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER NOT NULL,
+                service_type TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                amount INTEGER DEFAULT 0,
+                currency TEXT DEFAULT 'XAF',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                verification_status TEXT DEFAULT 'unverified',
+                verification_risk_score INTEGER DEFAULT 0,
+                last_verified_at TIMESTAMP
+            )"""
+        ]
+
+        for statement in statements:
+            cursor.execute(statement)
+    else:
+        cursor.executescript("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT,
+                role TEXT NOT NULL CHECK(role IN ('student', 'organization', 'institution', 'admin')),
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                verification_status TEXT DEFAULT 'unverified',
+                verification_risk_score INTEGER DEFAULT 0,
+                last_verified_at TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS student_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL UNIQUE,
+                institution TEXT,
+                field_of_study TEXT,
+                level TEXT,
+                skills TEXT,
+                interests TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS organization_profiles
+            CREATE TABLE IF NOT EXISTS student_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL UNIQUE,
+                institution TEXT,
+                field_of_study TEXT,
+                level TEXT,
+                skills TEXT,
+                interests TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS organization_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                organization_name TEXT NOT NULL,
+                website TEXT,
+                description TEXT,
+                verification_status TEXT NOT NULL DEFAULT 'pending',
+                verified_at TIMESTAMP,
+                verified_by INTEGER,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                plan TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'inactive',
+                amount INTEGER DEFAULT 0,
+                currency TEXT DEFAULT 'XAF',
+                starts_at TIMESTAMP,
+                expires_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS organization_services (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL,
+                service_type TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                amount INTEGER DEFAULT 0,
+                currency TEXT DEFAULT 'XAF',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (organization_id) REFERENCES users(id)
+            );
+        """)
+
+    connection.commit()
+    connection.close()
+
+
 def init_db():
     database_url = os.environ.get("DATABASE_URL")
 
@@ -119,6 +269,78 @@ def init_db():
 
     if database_url:
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                password_hash TEXT,
+                role TEXT NOT NULL CHECK(role IN ('student', 'organization', 'institution', 'admin')),
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                verification_status TEXT DEFAULT 'unverified',
+                verification_risk_score INTEGER DEFAULT 0,
+                last_verified_at TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS student_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL UNIQUE,
+                institution TEXT,
+                field_of_study TEXT,
+                level TEXT,
+                skills TEXT,
+                interests TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS organization_profiles
+            CREATE TABLE IF NOT EXISTS student_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL UNIQUE,
+                institution TEXT,
+                field_of_study TEXT,
+                level TEXT,
+                skills TEXT,
+                interests TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE TABLE IF NOT EXISTS organization_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                organization_name TEXT NOT NULL,
+                website TEXT,
+                description TEXT,
+                verification_status TEXT NOT NULL DEFAULT 'pending',
+                verified_at TIMESTAMP,
+                verified_by INTEGER,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                plan TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'inactive',
+                amount INTEGER DEFAULT 0,
+                currency TEXT DEFAULT 'XAF',
+                starts_at TIMESTAMP,
+                expires_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS organization_services (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                organization_id INTEGER NOT NULL,
+                service_type TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                amount INTEGER DEFAULT 0,
+                currency TEXT DEFAULT 'XAF',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (organization_id) REFERENCES users(id)
+            );
+
             CREATE TABLE IF NOT EXISTS verification_records (
                 id SERIAL PRIMARY KEY,
                 url TEXT NOT NULL,
@@ -128,7 +350,10 @@ def init_db():
                 source_verified BOOLEAN,
                 findings TEXT,
                 risk_evidence TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                verification_status TEXT DEFAULT 'unverified',
+                verification_risk_score INTEGER DEFAULT 0,
+                last_verified_at TIMESTAMP
             )
         """)
 
@@ -143,7 +368,10 @@ def init_db():
                 location TEXT,
                 deadline TEXT,
                 status TEXT DEFAULT 'active',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                verification_status TEXT DEFAULT 'unverified',
+                verification_risk_score INTEGER DEFAULT 0,
+                last_verified_at TIMESTAMP
             )
         """)
 
@@ -176,7 +404,10 @@ def init_db():
                 source_verified INTEGER,
                 findings TEXT,
                 risk_evidence TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                verification_status TEXT DEFAULT 'unverified',
+                verification_risk_score INTEGER DEFAULT 0,
+                last_verified_at TIMESTAMP
             )
         """)
 
@@ -191,7 +422,10 @@ def init_db():
                 location TEXT,
                 deadline TEXT,
                 status TEXT DEFAULT 'active',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                verification_status TEXT DEFAULT 'unverified',
+                verification_risk_score INTEGER DEFAULT 0,
+                last_verified_at TIMESTAMP
             )
         """)
 
@@ -205,6 +439,7 @@ if __name__ == "__main__":
     print("CampusBridge database initialized successfully.")
 
 
+    init_business_tables()
 def save_verification_record(result):
     import json
 
