@@ -222,6 +222,21 @@ def init_db():
             )
         """)
 
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS applications (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                opportunity_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'submitted',
+                notes TEXT DEFAULT '',
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id),
+                FOREIGN KEY (opportunity_id) REFERENCES opportunities(id),
+                UNIQUE (user_id, opportunity_id)
+            )
+        """)
+
         cursor.execute("SELECT COUNT(*) FROM opportunities")
         count = cursor.fetchone()[0]
 
