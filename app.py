@@ -744,7 +744,12 @@ def create_student_profile(user_id):
 
 
 @app.route("/api/students/<int:user_id>/profile", methods=["GET"])
+@token_required
 def get_student_profile(user_id):
+    if request.current_user_id != user_id:
+        return jsonify({
+            "error": "You are not authorized to view this profile."
+        }), 403
     conn = get_db_connection()
 
     try:
