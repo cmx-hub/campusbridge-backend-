@@ -104,33 +104,22 @@ def get_db_connection():
     database_url = os.environ.get("DATABASE_URL")
 
     if database_url:
-        return psycopg2.connect(database_url)
-
-    connection = sqlite3.connect(DATABASE)
-    connection.row_factory = sqlite3.Row
-    return connection
-
-
-
-def init_business_tables():
-    connection = get_db_connection()
-    cursor = connection.cursor()
-
-    if os.environ.get("DATABASE_URL"):
-        statements = [
-            """CREATE TABLE IF NOT EXISTS users (
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL,
                 email TEXT NOT NULL UNIQUE,
                 password_hash TEXT,
-                role TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('student', 'organization', 'institution', 'admin')),
                 status TEXT NOT NULL DEFAULT 'active',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 verification_status TEXT DEFAULT 'unverified',
                 verification_risk_score INTEGER DEFAULT 0,
                 last_verified_at TIMESTAMP
-            )""",
-            """CREATE TABLE IF NOT EXISTS organization_profiles
+            )
+        """)
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS student_profiles (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL UNIQUE,
@@ -140,8 +129,12 @@ def init_business_tables():
                 skills TEXT,
                 interests TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            ),
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS organization_profiles (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
@@ -150,9 +143,13 @@ def init_business_tables():
                 description TEXT,
                 verification_status TEXT NOT NULL DEFAULT 'pending',
                 verified_at TIMESTAMP,
-                verified_by INTEGER
-            )""",
-            """CREATE TABLE IF NOT EXISTS subscriptions (
+                verified_by INTEGER,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS subscriptions (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 plan TEXT NOT NULL,
@@ -162,11 +159,12 @@ def init_business_tables():
                 starts_at TIMESTAMP,
                 expires_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                verification_status TEXT DEFAULT 'unverified',
-                verification_risk_score INTEGER DEFAULT 0,
-                last_verified_at TIMESTAMP
-            )""",
-            """CREATE TABLE IF NOT EXISTS organization_services (
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS organization_services (
                 id SERIAL PRIMARY KEY,
                 organization_id INTEGER NOT NULL,
                 service_type TEXT NOT NULL,
@@ -174,14 +172,63 @@ def init_business_tables():
                 amount INTEGER DEFAULT 0,
                 currency TEXT DEFAULT 'XAF',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (organization_id) REFERENCES users(id)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS verification_records (
+                id SERIAL PRIMARY KEY,
+                url TEXT NOT NULL,
+                organization TEXT,
+                risk_level TEXT,
+                risk_score INTEGER,
+                source_verified BOOLEAN,
+                findings TEXT,
+                risk_evidence TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 verification_status TEXT DEFAULT 'unverified',
                 verification_risk_score INTEGER DEFAULT 0,
                 last_verified_at TIMESTAMP
-            )"""
-        ]
+            )
+        """)
 
-        for statement in statements:
-            cursor.execute(statement)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS opportunities (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                category TEXT NOT NULL,
+                organization TEXT,
+                description TEXT,
+                source_url TEXT NOT NULL,
+                location TEXT,
+                deadline TEXT,
+                status TEXT DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                verification_status TEXT DEFAULT 'unverified',
+                verification_risk_score INTEGER DEFAULT 0,
+                last_verified_at TIMESTAMP
+            )
+        """)
+
+        cursor.execute("SELECT COUNT(*) FROM opportunities")
+        count = cursor.fetchone()[0]
+
+        if count == 0:
+            cursor.executemany("""
+                INSERT INTO opportunities (
+                    title,
+                    category,
+                    organization,
+                    description,
+                    source_url,
+                    location,
+                    deadline,
+                    status
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            """, OPPORTUNITIES)
+
     else:
         cursor.executescript("""
             CREATE TABLE IF NOT EXISTS users (
@@ -270,7 +317,7 @@ def init_db():
     if database_url:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL,
                 email TEXT NOT NULL UNIQUE,
                 password_hash TEXT,
@@ -280,10 +327,12 @@ def init_db():
                 verification_status TEXT DEFAULT 'unverified',
                 verification_risk_score INTEGER DEFAULT 0,
                 last_verified_at TIMESTAMP
-            );
+            )
+        """)
 
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS student_profiles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL UNIQUE,
                 institution TEXT,
                 field_of_study TEXT,
@@ -291,22 +340,14 @@ def init_db():
                 skills TEXT,
                 interests TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-            CREATE TABLE IF NOT EXISTS organization_profiles
-            CREATE TABLE IF NOT EXISTS student_profiles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL UNIQUE,
-                institution TEXT,
-                field_of_study TEXT,
-                level TEXT,
-                skills TEXT,
-                interests TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS organization_profiles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 organization_name TEXT NOT NULL,
                 website TEXT,
@@ -315,10 +356,12 @@ def init_db():
                 verified_at TIMESTAMP,
                 verified_by INTEGER,
                 FOREIGN KEY (user_id) REFERENCES users(id)
-            );
+            )
+        """)
 
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS subscriptions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 plan TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'inactive',
@@ -328,10 +371,12 @@ def init_db():
                 expires_at TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
-            );
+            )
+        """)
 
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS organization_services (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 organization_id INTEGER NOT NULL,
                 service_type TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
@@ -339,8 +384,10 @@ def init_db():
                 currency TEXT DEFAULT 'XAF',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (organization_id) REFERENCES users(id)
-            );
+            )
+        """)
 
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS verification_records (
                 id SERIAL PRIMARY KEY,
                 url TEXT NOT NULL,
@@ -381,18 +428,11 @@ def init_db():
         if count == 0:
             cursor.executemany("""
                 INSERT INTO opportunities (
-                    title,
-                    category,
-                    organization,
-                    description,
-                    source_url,
-                    location,
-                    deadline,
-                    status
+                    title, category, organization, description,
+                    source_url, location, deadline, status
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, OPPORTUNITIES)
-
     else:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS verification_records (
