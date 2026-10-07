@@ -1,4 +1,7 @@
 import os
+from datetime import datetime, timedelta, timezone
+import jwt
+from functools import wraps
 from flask import request, Flask, jsonify
 from flask_cors import CORS
 from flask_limiter import Limiter
@@ -38,6 +41,53 @@ CORS(
 
 # Make sure the database and its tables exist
 init_db()
+
+
+def token_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization", "")
+
+        if not auth_header.startswith("Bearer "):
+            return jsonify({
+                "error": "Authentication token is required."
+            }), 401
+
+        token = auth_header.split(" ", 1)[1].strip()
+
+        if not token:
+            return jsonify({
+                "error": "Authentication token is required."
+            }), 401
+
+        jwt_secret = os.environ.get("JWT_SECRET")
+
+        if not jwt_secret:
+            return jsonify({
+                "error": "Authentication service is not configured."
+            }), 500
+
+        try:
+            payload = jwt.decode(
+                token,
+                jwt_secret,
+                algorithms=["HS256"]
+            )
+        except jwt.ExpiredSignatureError:
+            return jsonify({
+                "error": "Authentication token has expired."
+            }), 401
+        except jwt.InvalidTokenError:
+            return jsonify({
+                "error": "Invalid authentication token."
+            }), 401
+
+        request.current_user_id = int(payload["sub"])
+        request.current_user_role = payload["role"]
+
+        return f(*args, **kwargs)
+
+    return decorated
 
 
 @app.route("/api/health", methods=["GET"])
@@ -567,8 +617,26 @@ def login_student():
                 "error": "Invalid email or password."
             }), 401
 
+        jwt_secret = os.environ.get("JWT_SECRET")
+
+        if not jwt_secret:
+            return jsonify({
+                "error": "Authentication service is not configured."
+            }), 500
+
+        token = jwt.encode(
+            {
+                "sub": str(user_id),
+                "role": role,
+                "exp": datetime.now(timezone.utc) + timedelta(hours=2)
+            },
+            jwt_secret,
+            algorithm="HS256"
+        )
+
         return jsonify({
             "message": "Login successful.",
+            "token": token,
             "user": {
                 "id": user_id,
                 "name": name,
@@ -960,7 +1028,13 @@ def submit_student_application(user_id):
 
 
 @app.route("/api/students/<int:user_id>/applications", methods=["GET"])
+@token_required
 def get_student_applications(user_id):
+    if request.current_user_id != user_id:
+        return jsonify({
+            "error": "You are not authorized to view these applications."
+        }), 403
+
     conn = get_db_connection()
 
     try:

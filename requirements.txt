@@ -12,3 +12,4 @@ packaging==24.2
 psycopg2-binary==2.9.13
 rapidfuzz==3.14.3
 Werkzeug==3.1.9
+PyJWT==2.15.1
