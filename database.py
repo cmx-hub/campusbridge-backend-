@@ -201,7 +201,7 @@ def init_db():
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS password_reset_tokens (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 token_hash TEXT NOT NULL,
                 expires_at TIMESTAMP NOT NULL,
