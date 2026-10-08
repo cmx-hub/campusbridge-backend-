@@ -499,10 +499,24 @@ def register_student():
     name = data.get("name", "").strip()
     email = data.get("email", "").strip().lower()
     password = data.get("password", "")
+    institution = data.get("institution", "").strip()
+    field_of_study = data.get("field_of_study", "").strip()
+    level = data.get("level", "").strip()
+    skills = data.get("skills", "").strip()
+    interests = data.get("interests", "").strip()
 
-    if not name or not email or not password:
+    if not all([
+        name,
+        email,
+        password,
+        institution,
+        field_of_study,
+        level,
+        skills,
+        interests
+    ]):
         return jsonify({
-            "error": "Name, email and password are required."
+            "error": "Name, email, password, institution, field of study, level, skills and interests are required."
         }), 400
 
     if len(password) < 8:
@@ -548,14 +562,55 @@ def register_student():
             (name, email, password_hash, "student", "active")
         )
 
+        cursor.execute(
+            "SELECT id FROM users WHERE email = %s"
+            if os.environ.get("DATABASE_URL")
+            else
+            "SELECT id FROM users WHERE email = ?",
+            (email,)
+        )
+
+        user_id = cursor.fetchone()[0]
+
+        cursor.execute(
+            """
+            INSERT INTO student_profiles
+            (user_id, institution, field_of_study, level, skills, interests)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """
+            if os.environ.get("DATABASE_URL")
+            else
+            """
+            INSERT INTO student_profiles
+            (user_id, institution, field_of_study, level, skills, interests)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                institution,
+                field_of_study,
+                level,
+                skills,
+                interests
+            )
+        )
+
         conn.commit()
 
         return jsonify({
-            "message": "Student account created successfully.",
+            "message": "Student account and profile created successfully.",
             "user": {
+                "id": user_id,
                 "name": name,
                 "email": email,
                 "role": "student"
+            },
+            "profile": {
+                "institution": institution,
+                "field_of_study": field_of_study,
+                "level": level,
+                "skills": skills,
+                "interests": interests
             }
         }), 201
 
