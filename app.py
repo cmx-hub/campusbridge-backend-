@@ -1276,6 +1276,123 @@ def get_student_applications(user_id):
 
 
 
+
+
+@app.route("/api/students/<int:user_id>/saved-opportunities", methods=["GET"])
+@token_required
+def get_saved_opportunities(user_id):
+    if request.current_user_id != user_id:
+        return jsonify({"error": "You are not authorized to view these saved opportunities."}), 403
+    if request.current_user_role != "student":
+        return jsonify({"error": "Only student accounts can access saved opportunities."}), 403
+
+    conn = get_db_connection()
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        placeholder = "%s" if os.environ.get("DATABASE_URL") else "?"
+        cursor.execute(
+            f"SELECT id, title, category, organization, description, source_url, location, deadline, status "
+            f"FROM opportunities WHERE id IN ("
+            f"SELECT opportunity_id FROM saved_opportunities WHERE user_id = {placeholder}) "
+            f"ORDER BY title",
+            (user_id,)
+        )
+        rows = cursor.fetchall()
+        items = [{
+            "id": row[0],
+            "title": row[1],
+            "category": row[2],
+            "organization": row[3],
+            "description": row[4],
+            "source_url": row[5],
+            "location": row[6],
+            "deadline": row[7],
+            "status": row[8]
+        } for row in rows]
+        return jsonify({"user_id": user_id, "saved_opportunities": items, "count": len(items)}), 200
+    except Exception:
+        app.logger.exception("Unable to retrieve saved opportunities")
+        return jsonify({"error": "Unable to retrieve saved opportunities."}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
+
+
+@app.route("/api/students/<int:user_id>/saved-opportunities", methods=["POST"])
+@token_required
+def save_student_opportunity(user_id):
+    if request.current_user_id != user_id:
+        return jsonify({"error": "You are not authorized to save opportunities for this account."}), 403
+    if request.current_user_role != "student":
+        return jsonify({"error": "Only student accounts can save opportunities."}), 403
+
+    data = request.get_json(silent=True) or {}
+    opportunity_id = data.get("opportunity_id")
+    if isinstance(opportunity_id, bool) or not isinstance(opportunity_id, int) or opportunity_id < 1:
+        return jsonify({"error": "A valid integer opportunity_id is required."}), 400
+
+    conn = get_db_connection()
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        placeholder = "%s" if os.environ.get("DATABASE_URL") else "?"
+        cursor.execute(
+            f"SELECT id FROM opportunities WHERE id = {placeholder}",
+            (opportunity_id,)
+        )
+        if not cursor.fetchone():
+            return jsonify({"error": "Opportunity not found."}), 404
+
+        cursor.execute(
+            f"INSERT INTO saved_opportunities (user_id, opportunity_id) "
+            f"VALUES ({placeholder}, {placeholder}) "
+            f"ON CONFLICT (user_id, opportunity_id) DO NOTHING",
+            (user_id, opportunity_id)
+        )
+        conn.commit()
+        return jsonify({"message": "Opportunity saved.", "opportunity_id": opportunity_id}), 200
+    except Exception:
+        conn.rollback()
+        app.logger.exception("Unable to save opportunity")
+        return jsonify({"error": "Unable to save opportunity."}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
+
+
+@app.route("/api/students/<int:user_id>/saved-opportunities/<int:opportunity_id>", methods=["DELETE"])
+@token_required
+def unsave_student_opportunity(user_id, opportunity_id):
+    if request.current_user_id != user_id:
+        return jsonify({"error": "You are not authorized to modify these saved opportunities."}), 403
+    if request.current_user_role != "student":
+        return jsonify({"error": "Only student accounts can remove saved opportunities."}), 403
+
+    conn = get_db_connection()
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        placeholder = "%s" if os.environ.get("DATABASE_URL") else "?"
+        cursor.execute(
+            f"DELETE FROM saved_opportunities WHERE user_id = {placeholder} "
+            f"AND opportunity_id = {placeholder}",
+            (user_id, opportunity_id)
+        )
+        conn.commit()
+        return jsonify({"message": "Saved opportunity removed.", "opportunity_id": opportunity_id}), 200
+    except Exception:
+        conn.rollback()
+        app.logger.exception("Unable to remove saved opportunity")
+        return jsonify({"error": "Unable to remove saved opportunity."}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        conn.close()
+
+
 @app.route("/api/students/<int:user_id>/applications/<int:application_id>", methods=["PUT"])
 def update_student_application(user_id, application_id):
     data = request.get_json(silent=True) or {}

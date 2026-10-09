@@ -235,6 +235,16 @@ def init_db():
         """)
 
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS saved_opportunities (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                opportunity_id INTEGER NOT NULL REFERENCES opportunities(id) ON DELETE CASCADE,
+                saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (user_id, opportunity_id)
+            )
+        """)
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS applications (
                 id SERIAL PRIMARY KEY,
                 user_id INTEGER NOT NULL,
@@ -293,6 +303,18 @@ def init_db():
                 verification_status TEXT DEFAULT 'unverified',
                 verification_risk_score INTEGER DEFAULT 0,
                 last_verified_at TIMESTAMP
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS saved_opportunities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                opportunity_id INTEGER NOT NULL,
+                saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (user_id, opportunity_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE
             )
         """)
 
