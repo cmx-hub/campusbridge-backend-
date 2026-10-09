@@ -349,6 +349,76 @@ def verify_specific_opportunity(opportunity_id):
     })
 
 
+
+@app.route("/api/organization/profile", methods=["GET"])
+@token_required
+def organization_profile():
+    if request.current_user_role != "organization":
+        return jsonify({"error": "Organization account required."}), 403
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        placeholder = "%s" if os.getenv("DATABASE_URL") else "?"
+        cursor.execute(
+            "SELECT organization_name, website, description, verification_status "
+            "FROM organization_profiles WHERE user_id = " + placeholder,
+            (request.current_user_id,)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return jsonify({"error": "Organization profile not found."}), 404
+
+        names = [col[0] for col in cursor.description]
+        profile = dict(row) if hasattr(row, "keys") else dict(zip(names, row))
+        return jsonify({"profile": profile}), 200
+    except Exception:
+        app.logger.exception("Organization profile request failed")
+        return jsonify({"error": "Could not load organization profile."}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
+@app.route("/api/organization/opportunities", methods=["GET"])
+@token_required
+def organization_opportunities():
+    if request.current_user_role != "organization":
+        return jsonify({"error": "Organization account required."}), 403
+
+    conn = None
+    cursor = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        placeholder = "%s" if os.getenv("DATABASE_URL") else "?"
+        cursor.execute(
+            "SELECT id, title, category, organization, description, source_url, "
+            "location, deadline, status, approval_status, verification_status "
+            "FROM opportunities WHERE owner_id = " + placeholder + " ORDER BY id DESC",
+            (request.current_user_id,)
+        )
+        names = [col[0] for col in cursor.description]
+        rows = cursor.fetchall()
+        items = [
+            dict(row) if hasattr(row, "keys") else dict(zip(names, row))
+            for row in rows
+        ]
+        return jsonify({"opportunities": items}), 200
+    except Exception:
+        app.logger.exception("Organization opportunities request failed")
+        return jsonify({"error": "Could not load your submissions."}), 500
+    finally:
+        if cursor:
+            cursor.close()
+        if conn:
+            conn.close()
+
+
 @app.route("/api/opportunities/submit", methods=["POST"])
 @token_required
 def submit_opportunity():
