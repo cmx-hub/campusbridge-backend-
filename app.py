@@ -127,7 +127,7 @@ def get_opportunities():
             status,
             created_at
         FROM opportunities
-        WHERE 1=1
+        WHERE approval_status = 'approved'
     """
 
     params = []
@@ -246,7 +246,7 @@ def get_opportunity(opportunity_id):
             verification_risk_score,
             last_verified_at
         FROM opportunities
-        WHERE id = {placeholder}
+        WHERE id = {placeholder} AND approval_status = 'approved'
     """, (opportunity_id,))
 
     opportunity = cursor.fetchone()
@@ -292,7 +292,7 @@ def verify_specific_opportunity(opportunity_id):
     cursor.execute(f"""
         SELECT source_url, organization
         FROM opportunities
-        WHERE id = {placeholder}
+        WHERE id = {placeholder} AND approval_status = 'approved'
     """, (opportunity_id,))
 
     opportunity = cursor.fetchone()
@@ -350,11 +350,16 @@ def verify_specific_opportunity(opportunity_id):
 
 
 @app.route("/api/opportunities/submit", methods=["POST"])
+@token_required
 def submit_opportunity():
+    if request.current_user_role not in {"organization", "institution"}:
+        return jsonify({
+            "success": False,
+            "error": "Only organization or institution accounts can submit opportunities."
+        }), 403
     data = request.get_json(silent=True) or {}
 
     required = [
-        "owner_id",
         "title",
         "category",
         "organization",
@@ -392,7 +397,7 @@ def submit_opportunity():
                 data["source_url"],
                 data.get("location"),
                 data.get("deadline"),
-                data["owner_id"]
+                request.current_user_id
             ))
             opportunity_id = cursor.fetchone()[0]
 
@@ -412,7 +417,7 @@ def submit_opportunity():
                 data["source_url"],
                 data.get("location"),
                 data.get("deadline"),
-                data["owner_id"]
+                request.current_user_id
             ))
             opportunity_id = cursor.lastrowid
 
@@ -426,14 +431,16 @@ def submit_opportunity():
             "verification_status": "pending"
         }), 201
 
-    except Exception as e:
+    except Exception:
         connection.rollback()
+        app.logger.exception("Unable to submit opportunity")
         return jsonify({
             "success": False,
-            "error": str(e)
+            "error": "Unable to submit opportunity."
         }), 500
 
     finally:
+        cursor.close()
         connection.close()
 
 

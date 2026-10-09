@@ -318,6 +318,44 @@ def init_db():
             )
         """)
 
+    # Add missing opportunity ownership and review columns safely.
+    if database_url:
+        cursor.execute("""
+            ALTER TABLE opportunities
+            ADD COLUMN IF NOT EXISTS owner_id INTEGER
+        """)
+        cursor.execute("""
+            ALTER TABLE opportunities
+            ADD COLUMN IF NOT EXISTS approval_status TEXT
+            NOT NULL DEFAULT 'approved'
+        """)
+        cursor.execute("""
+            ALTER TABLE opportunities
+            ADD COLUMN IF NOT EXISTS featured BOOLEAN
+            NOT NULL DEFAULT FALSE
+        """)
+    else:
+        cursor.execute("PRAGMA table_info(opportunities)")
+        columns = {row[1] for row in cursor.fetchall()}
+
+        if "owner_id" not in columns:
+            cursor.execute(
+                "ALTER TABLE opportunities ADD COLUMN owner_id INTEGER"
+            )
+
+        if "approval_status" not in columns:
+            cursor.execute("""
+                ALTER TABLE opportunities
+                ADD COLUMN approval_status TEXT
+                NOT NULL DEFAULT 'approved'
+            """)
+
+        if "featured" not in columns:
+            cursor.execute("""
+                ALTER TABLE opportunities
+                ADD COLUMN featured BOOLEAN NOT NULL DEFAULT 0
+            """)
+
     connection.commit()
     cursor.close()
     connection.close()
