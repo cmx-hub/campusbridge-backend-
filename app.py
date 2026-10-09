@@ -498,138 +498,194 @@ def verification_history():
     })
 
 @app.route("/api/auth/register", methods=["POST"])
+@limiter.limit("5 per minute")
 def register_student():
     from werkzeug.security import generate_password_hash
 
     data = request.get_json(silent=True) or {}
-
     name = data.get("name", "").strip()
     email = data.get("email", "").strip().lower()
     password = data.get("password", "")
+    role = data.get("account_type", data.get("role", "student")).strip().lower()
+
+    if role not in {"student", "organization", "institution"}:
+        return jsonify({"error": "Choose Student, Organization, or Institution."}), 400
+
+    if not name or not email or not password:
+        return jsonify({"error": "Name, email, and password are required."}), 400
+
+    if len(password) < 8:
+        return jsonify({"error": "Password must be at least 8 characters."}), 400
+
+    if "@" not in email or "." not in email.split("@")[-1]:
+        return jsonify({"error": "Please provide a valid email address."}), 400
+
     institution = data.get("institution", "").strip()
     field_of_study = data.get("field_of_study", "").strip()
     level = data.get("level", "").strip()
     skills = data.get("skills", "").strip()
     interests = data.get("interests", "").strip()
+    entity_name = data.get("organization_name", data.get("institution_name", "")).strip()
+    website = data.get("website", "").strip()
+    description = data.get("description", "").strip()
 
-    if not all([
-        name,
-        email,
-        password,
-        institution,
-        field_of_study,
-        level,
-        skills,
-        interests
+    if role == "student" and not all([
+        institution, field_of_study, level, skills, interests
     ]):
         return jsonify({
-            "error": "Name, email, password, institution, field of study, level, skills and interests are required."
+            "error": "Institution, field of study, level, skills and interests are required for student accounts."
         }), 400
 
-    if len(password) < 8:
+    if role in {"organization", "institution"} and not entity_name:
         return jsonify({
-            "error": "Password must be at least 8 characters."
-        }), 400
-
-    if "@" not in email or "." not in email.split("@")[-1]:
-        return jsonify({
-            "error": "Please provide a valid email address."
+            "error": "Organization name or institution name is required."
         }), 400
 
     conn = get_db_connection()
+    cursor = None
 
     try:
         cursor = conn.cursor()
+        postgres = bool(os.environ.get("DATABASE_URL"))
 
         cursor.execute(
             "SELECT id FROM users WHERE email = %s"
-            if os.environ.get("DATABASE_URL")
-            else "SELECT id FROM users WHERE email = ?",
+            if postgres else "SELECT id FROM users WHERE email = ?",
             (email,)
         )
-
         if cursor.fetchone():
-            return jsonify({
-                "error": "An account with this email already exists."
-            }), 409
-
-        password_hash = generate_password_hash(password)
+            return jsonify({"error": "An account with this email already exists."}), 409
 
         cursor.execute(
             """
             INSERT INTO users (name, email, password_hash, role, status)
             VALUES (%s, %s, %s, %s, %s)
             """
-            if os.environ.get("DATABASE_URL")
-            else
+            if postgres else
             """
             INSERT INTO users (name, email, password_hash, role, status)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (name, email, password_hash, "student", "active")
+            (name, email, generate_password_hash(password), role, "active")
         )
 
         cursor.execute(
             "SELECT id FROM users WHERE email = %s"
-            if os.environ.get("DATABASE_URL")
-            else
-            "SELECT id FROM users WHERE email = ?",
+            if postgres else "SELECT id FROM users WHERE email = ?",
             (email,)
         )
-
         user_id = cursor.fetchone()[0]
 
-        cursor.execute(
-            """
-            INSERT INTO student_profiles
-            (user_id, institution, field_of_study, level, skills, interests)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """
-            if os.environ.get("DATABASE_URL")
-            else
-            """
-            INSERT INTO student_profiles
-            (user_id, institution, field_of_study, level, skills, interests)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                user_id,
-                institution,
-                field_of_study,
-                level,
-                skills,
-                interests
+        if role == "student":
+            cursor.execute(
+                """
+                INSERT INTO student_profiles
+                (user_id, institution, field_of_study, level, skills, interests)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """
+                if postgres else
+                """
+                INSERT INTO student_profiles
+                (user_id, institution, field_of_study, level, skills, interests)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (user_id, institution, field_of_study, level, skills, interests)
             )
-        )
-
-        conn.commit()
-
-        return jsonify({
-            "message": "Student account and profile created successfully.",
-            "user": {
-                "id": user_id,
-                "name": name,
-                "email": email,
-                "role": "student"
-            },
-            "profile": {
+            profile = {
                 "institution": institution,
                 "field_of_study": field_of_study,
                 "level": level,
                 "skills": skills,
                 "interests": interests
             }
+        elif role == "organization":
+            cursor.execute(
+                """
+                INSERT INTO organization_profiles
+                (user_id, organization_name, website, description)
+                VALUES (%s, %s, %s, %s)
+                """
+                if postgres else
+                """
+                INSERT INTO organization_profiles
+                (user_id, organization_name, website, description)
+                VALUES (?, ?, ?, ?)
+                """,
+                (user_id, entity_name, website or None, description or None)
+            )
+            profile = {
+                "organization_name": entity_name,
+                "website": website,
+                "description": description
+            }
+        else:
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS institution_profiles (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL UNIQUE,
+                    institution_name TEXT NOT NULL,
+                    website TEXT,
+                    description TEXT,
+                    verification_status TEXT NOT NULL DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+                """
+                if postgres else
+                """
+                CREATE TABLE IF NOT EXISTS institution_profiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL UNIQUE,
+                    institution_name TEXT NOT NULL,
+                    website TEXT,
+                    description TEXT,
+                    verification_status TEXT NOT NULL DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+                """
+            )
+            cursor.execute(
+                """
+                INSERT INTO institution_profiles
+                (user_id, institution_name, website, description)
+                VALUES (%s, %s, %s, %s)
+                """
+                if postgres else
+                """
+                INSERT INTO institution_profiles
+                (user_id, institution_name, website, description)
+                VALUES (?, ?, ?, ?)
+                """,
+                (user_id, entity_name, website or None, description or None)
+            )
+            profile = {
+                "institution_name": entity_name,
+                "website": website,
+                "description": description
+            }
+
+        conn.commit()
+        return jsonify({
+            "message": f"{role.capitalize()} account created successfully.",
+            "user": {
+                "id": user_id,
+                "name": name,
+                "email": email,
+                "role": role
+            },
+            "profile": profile
         }), 201
 
-    except Exception as e:
+    except Exception:
         conn.rollback()
-        return jsonify({
-            "error": "Unable to create account.",
-            "details": str(e)
-        }), 500
+        app.logger.exception("Account registration failed")
+        return jsonify({"error": "Unable to create account. Please try again."}), 500
 
     finally:
-        cursor.close()
+        if cursor:
+            cursor.close()
         conn.close()
 
 @app.route("/api/auth/request-password-reset", methods=["POST"])
