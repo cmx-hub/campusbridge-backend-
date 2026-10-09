@@ -172,7 +172,8 @@ def get_opportunities():
         "location",
         "deadline",
         "status",
-        "created_at"
+        "created_at",
+        "last_verified_at"
     ]
 
     if is_postgres:
@@ -241,9 +242,6 @@ def get_opportunity(opportunity_id):
             deadline,
             status,
             created_at,
-            verification_status,
-            verification_risk_score,
-            last_verified_at,
             verification_status,
             verification_risk_score,
             last_verified_at
