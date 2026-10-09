@@ -200,18 +200,6 @@ def init_db():
         """)
 
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS password_reset_tokens (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER NOT NULL,
-                token_hash TEXT NOT NULL,
-                expires_at TIMESTAMP NOT NULL,
-                used INTEGER NOT NULL DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            )
-        """)
-
-        cursor.execute("""
             CREATE TABLE IF NOT EXISTS verification_records (
                 id SERIAL PRIMARY KEY,
                 url TEXT NOT NULL,

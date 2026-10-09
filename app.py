@@ -1,4 +1,6 @@
 import os
+import hashlib
+import secrets
 from datetime import datetime, timedelta, timezone
 import jwt
 from functools import wraps
@@ -625,8 +627,116 @@ def register_student():
         cursor.close()
         conn.close()
 
+@app.route("/api/auth/request-password-reset", methods=["POST"])
 @limiter.limit("5 per minute")
+def request_password_reset():
+    # Recovery stays disabled until a secure email delivery provider is configured.
+    # Never expose recovery codes in API responses.
+    return jsonify({
+        "error": "Password recovery is temporarily unavailable. Please contact support."
+    }), 503
+
+
+@app.route("/api/auth/reset-password", methods=["POST"])
+@limiter.limit("5 per minute")
+def reset_password():
+    from werkzeug.security import generate_password_hash
+
+    data = request.get_json(silent=True) or {}
+
+    email = data.get("email", "").strip().lower()
+    recovery_code = data.get("recovery_code", "").strip()
+    new_password = data.get("new_password", "")
+
+    if not email or not recovery_code or not new_password:
+        return jsonify({
+            "error": "Email, recovery code, and new password are required."
+        }), 400
+
+    if not recovery_code.isdigit() or len(recovery_code) != 6:
+        return jsonify({
+            "error": "Recovery code must be a 6-digit code."
+        }), 400
+
+    if len(new_password) < 8:
+        return jsonify({
+            "error": "New password must be at least 8 characters."
+        }), 400
+
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    placeholder = "%s" if os.environ.get("DATABASE_URL") else "?"
+    false_value = False if os.environ.get("DATABASE_URL") else 0
+
+    cursor.execute(
+        f"SELECT id FROM users WHERE email = {placeholder}",
+        (email,)
+    )
+    user = cursor.fetchone()
+
+    if not user:
+        cursor.close()
+        connection.close()
+        return jsonify({"error": "Invalid recovery request."}), 400
+
+    user_id = user[0]
+
+    token_hash = hashlib.sha256(
+        recovery_code.encode("utf-8")
+    ).hexdigest()
+
+    cursor.execute(
+        f"""
+        SELECT id
+        FROM password_reset_tokens
+        WHERE user_id = {placeholder}
+          AND token_hash = {placeholder}
+          AND used = {placeholder}
+          AND expires_at > CURRENT_TIMESTAMP
+        ORDER BY created_at DESC
+        LIMIT 1
+        """,
+        (user_id, token_hash, false_value)
+    )
+
+    token = cursor.fetchone()
+
+    if not token:
+        cursor.close()
+        connection.close()
+        return jsonify({"error": "Invalid or expired recovery code."}), 400
+
+    password_hash = generate_password_hash(new_password)
+
+    cursor.execute(
+        f"""
+        UPDATE users
+        SET password_hash = {placeholder}
+        WHERE id = {placeholder}
+        """,
+        (password_hash, user_id)
+    )
+
+    cursor.execute(
+        f"""
+        UPDATE password_reset_tokens
+        SET used = {placeholder}
+        WHERE id = {placeholder}
+        """,
+        (True if os.environ.get("DATABASE_URL") else 1, token[0])
+    )
+
+    connection.commit()
+    cursor.close()
+    connection.close()
+
+    return jsonify({
+        "message": "Password reset successfully."
+    }), 200
+
 @app.route("/api/auth/login", methods=["POST"])
+@limiter.limit("5 per minute")
 def login_student():
     from werkzeug.security import check_password_hash
 
