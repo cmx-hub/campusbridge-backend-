@@ -40,6 +40,7 @@ def verify_url(url, organization=None):
     findings = []
     risk_score = 0
     risk_evidence = []
+    domain_intelligence = []
 
     def add_risk(points, category, reason):
         nonlocal risk_score
@@ -239,7 +240,10 @@ def verify_url(url, organization=None):
             "An unexpected error occurred during verification."
         )
 
-    # 5. Determine risk level
+    # 5. Keep the risk score within the 0–100 range.
+    risk_score = min(100, max(0, risk_score))
+
+    # 6. Determine risk level
     if risk_score >= 60:
         risk_level = "HIGH"
     elif risk_score >= 30:
