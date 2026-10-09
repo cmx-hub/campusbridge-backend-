@@ -17,4 +17,5 @@ OFFICIAL_SOURCES = {
     "University of Cambridge": ["cam.ac.uk"],
     "Mastercard Foundation": ["mastercardfdn.org"],
     "237HackFest": ["237hackfest.com"],
+    "OMDES": ["omdes.org"],
 }
