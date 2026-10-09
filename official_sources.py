@@ -13,5 +13,8 @@ OFFICIAL_SOURCES = {
     ],
     "Cameroon Civil Aviation Authority": [
         "ccaa.aero"
-    ]
+    ],
+    "University of Cambridge": ["cam.ac.uk"],
+    "Mastercard Foundation": ["mastercardfdn.org"],
+    "237HackFest": ["237hackfest.com"],
 }
