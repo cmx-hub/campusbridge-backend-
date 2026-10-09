@@ -6,7 +6,7 @@ OFFICIAL_SOURCES = {
         "gov.cm"
     ],
     "MINESUP": [
-        "gov.cm"
+        "minesup.gov.cm"
     ],
     "Cameroon Telecommunications": [
         "camtel.cm"
